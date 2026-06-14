@@ -1,3 +1,40 @@
-.venv
-reports
-data
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and local environment files
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Jupyter / notebook checkpoints
+.ipynb_checkpoints/
+
+# Generated research artifacts
+data/
+reports/
+*.csv
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
