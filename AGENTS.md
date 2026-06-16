@@ -13,19 +13,19 @@
 
 ## 构建、测试与开发命令
 
-在当前 Python 环境中安装运行依赖：
+本项目指定虚拟环境解释器为 `/home/zj/crypto-alpha-research/.venv/bin/python`。安装依赖时优先使用该环境：
 
 ```bash
-pip install pandas requests matplotlib
+/home/zj/crypto-alpha-research/.venv/bin/python -m pip install pandas requests matplotlib
 ```
 
 常用工作流命令：
 
 ```bash
-python collectors/get_wld_data.py
-python collectors/get_wld_data.py -s BTCUSDT -i 4h -n 3000
-python analysis/streak_analysis.py -s WLDUSDT -i 1d -n 10
-python dashboard/streak_chart.py -s WLDUSDT -i 1d -p 3m
+/home/zj/crypto-alpha-research/.venv/bin/python collectors/get_wld_data.py
+/home/zj/crypto-alpha-research/.venv/bin/python collectors/get_wld_data.py -s BTCUSDT -i 4h -n 3000
+/home/zj/crypto-alpha-research/.venv/bin/python analysis/streak_analysis.py -s WLDUSDT -i 1d -n 10
+/home/zj/crypto-alpha-research/.venv/bin/python dashboard/streak_chart.py -s WLDUSDT -i 1d -p 3m
 ```
 
 采集脚本负责拉取 Binance K 线，分析脚本输出连续涨跌摘要，可视化脚本生成 PNG 报告。
@@ -39,7 +39,7 @@ python dashboard/streak_chart.py -s WLDUSDT -i 1d -p 3m
 当前没有专门的测试套件。修改脚本后，先运行语法检查：
 
 ```bash
-python -m py_compile collectors/get_wld_data.py analysis/streak_analysis.py dashboard/streak_chart.py
+/home/zj/crypto-alpha-research/.venv/bin/python -m py_compile collectors/get_wld_data.py analysis/streak_analysis.py dashboard/streak_chart.py
 ```
 
 修改分析逻辑时，使用小数据集验证连续涨跌日期、长度和百分比是否符合预期。后续新增测试建议使用 `pytest`，放在 `tests/` 下，文件名如 `test_streak_analysis.py`。

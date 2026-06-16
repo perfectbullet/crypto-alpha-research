@@ -25,6 +25,20 @@ TIME_RANGES = {
     "1y": timedelta(days=365),
     "all": None,
 }
+INTERVAL_DELTAS = {
+    "1m": timedelta(minutes=1),
+    "3m": timedelta(minutes=3),
+    "5m": timedelta(minutes=5),
+    "15m": timedelta(minutes=15),
+    "30m": timedelta(minutes=30),
+    "1h": timedelta(hours=1),
+    "2h": timedelta(hours=2),
+    "4h": timedelta(hours=4),
+    "6h": timedelta(hours=6),
+    "8h": timedelta(hours=8),
+    "12h": timedelta(hours=12),
+    "1d": timedelta(days=1),
+}
 
 
 def load_data(symbol: str, interval: str, period: str = "all") -> pd.DataFrame:
@@ -59,6 +73,47 @@ def compute_streaks(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def interval_delta(interval: str) -> timedelta:
+    return INTERVAL_DELTAS.get(interval, timedelta(days=1))
+
+
+def streak_unit(interval: str) -> str:
+    return "天" if interval == "1d" else f"根K线({interval})"
+
+
+def bar_width_days(interval: str) -> float:
+    return interval_delta(interval).total_seconds() / 86400 * 0.8
+
+
+def configure_time_axis(ax, df: pd.DataFrame, interval: str):
+    """根据周期和数据跨度设置时间轴，避免 4h 数据挤成按月标签。"""
+    if df.empty:
+        return
+
+    span_days = max((df["date"].iloc[-1] - df["date"].iloc[0]).total_seconds() / 86400, 0)
+    if interval == "1d":
+        if span_days <= 90:
+            ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d"))
+        else:
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+        return
+
+    if span_days <= 7:
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=12))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M"))
+    elif span_days <= 45:
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d"))
+    elif span_days <= 180:
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d"))
+    else:
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+
+
 def get_streak_spans(df: pd.DataFrame):
     """提取每段连续涨跌的起止索引。"""
     spans = []
@@ -81,6 +136,9 @@ PERIOD_LABELS = {"1m": "最近1个月", "3m": "最近3个月", "6m": "最近6个
 
 def plot_streak(df: pd.DataFrame, symbol: str, interval: str, period: str = "all"):
     period_label = PERIOD_LABELS.get(period, period)
+    unit = streak_unit(interval)
+    candle_width = bar_width_days(interval)
+    span_padding = interval_delta(interval)
     fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True,
                              gridspec_kw={"height_ratios": [3, 2, 1]})
     fig.suptitle(f"{symbol} ({interval}) 连续涨跌分析 — {period_label}", fontsize=16, fontweight="bold")
@@ -92,23 +150,23 @@ def plot_streak(df: pd.DataFrame, symbol: str, interval: str, period: str = "all
     ax1 = axes[0]
     ax1.plot(df["date"], df["close"], color="#333", linewidth=0.8, zorder=2)
     for start, end, d in spans:
-        ax1.axvspan(df["date"].iloc[start], df["date"].iloc[end - 1],
+        ax1.axvspan(df["date"].iloc[start], df["date"].iloc[end - 1] + span_padding,
                     alpha=0.12, color=colors[d])
     ax1.set_ylabel("收盘价")
     ax1.grid(alpha=0.3)
 
-    # ---- 2. 每日涨跌幅柱状图 ----
+    # ---- 2. 每根 K 线涨跌幅柱状图 ----
     ax2 = axes[1]
     bar_colors = df["direction"].map({1: "#e74c3c", -1: "#2ecc71", 0: "#bbb"})
-    ax2.bar(df["date"], df["change"] * 100, color=bar_colors, width=0.8)
+    ax2.bar(df["date"], df["change"] * 100, color=bar_colors, width=candle_width, align="edge")
     ax2.axhline(0, color="#333", linewidth=0.5)
     ax2.set_ylabel("涨跌幅 (%)")
     ax2.grid(alpha=0.3)
 
-    # ---- 3. 连续天数 ----
+    # ---- 3. 连续数量 ----
     ax3 = axes[2]
     streak_colors = df["direction"].map({1: "#e74c3c", -1: "#2ecc71", 0: "#bbb"})
-    ax3.bar(df["date"], df["streak"], color=streak_colors, width=0.8)
+    ax3.bar(df["date"], df["streak"], color=streak_colors, width=candle_width, align="edge")
     # 标注最大连续涨/跌
     for d, label in [(1, "最大连续上涨"), (-1, "最大连续下跌")]:
         sub = df[df["direction"] == d]
@@ -116,17 +174,16 @@ def plot_streak(df: pd.DataFrame, symbol: str, interval: str, period: str = "all
             continue
         best_idx = sub["streak"].idxmax()
         best_val = sub.loc[best_idx, "streak"]
-        ax3.annotate(f"{label}: {best_val}天",
+        ax3.annotate(f"{label}: {int(best_val)}{unit}",
                      xy=(df.loc[best_idx, "date"], best_val),
                      xytext=(0, 10), textcoords="offset points",
                      fontsize=9, fontweight="bold", ha="center",
                      color=colors[d],
                      arrowprops=dict(arrowstyle="->", color=colors[d]))
-    ax3.set_ylabel("连续天数")
+    ax3.set_ylabel(f"连续数量 / {unit}")
     ax3.grid(alpha=0.3)
 
-    ax3.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
-    ax3.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+    configure_time_axis(ax3, df, interval)
     plt.xticks(rotation=45)
 
     plt.tight_layout()

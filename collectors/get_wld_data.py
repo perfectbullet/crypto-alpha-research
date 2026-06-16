@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import time
+from datetime import datetime, timezone
 
 import pandas as pd
 import requests
@@ -22,14 +23,28 @@ ALL_COLS = [
     "taker_buy_base", "taker_buy_quote", "ignore",
 ]
 KEEP_COLS = ["date"] + OHLCV_COLS + ["trades"]
+INTERVAL_MS = {
+    "1m": 60 * 1000,
+    "3m": 3 * 60 * 1000,
+    "5m": 5 * 60 * 1000,
+    "15m": 15 * 60 * 1000,
+    "30m": 30 * 60 * 1000,
+    "1h": 60 * 60 * 1000,
+    "2h": 2 * 60 * 60 * 1000,
+    "4h": 4 * 60 * 60 * 1000,
+    "6h": 6 * 60 * 60 * 1000,
+    "8h": 8 * 60 * 60 * 1000,
+    "12h": 12 * 60 * 60 * 1000,
+    "1d": 24 * 60 * 60 * 1000,
+}
 
 
 def _request_klines(symbol: str, interval: str, limit: int,
-                    start_time: int | None = None, retries: int = 3) -> list:
+                    end_time: int | None = None, retries: int = 3) -> list:
     """带重试的 Binance K线请求。"""
     params = {"symbol": symbol, "interval": interval, "limit": limit}
-    if start_time is not None:
-        params["startTime"] = start_time
+    if end_time is not None:
+        params["endTime"] = end_time
 
     for attempt in range(1, retries + 1):
         try:
@@ -53,9 +68,19 @@ def _parse_klines(data: list) -> pd.DataFrame:
     return df[KEEP_COLS]
 
 
+def _latest_closed_end_time(interval: str) -> int | None:
+    """返回最新已收盘 K 线的 endTime，避免采集未完成的当前 K 线。"""
+    interval_ms = INTERVAL_MS.get(interval)
+    if interval_ms is None:
+        return None
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    current_open_ms = now_ms - (now_ms % interval_ms)
+    return current_open_ms - 1
+
+
 def get_binance_klines(symbol: str = "WLDUSDT", interval: str = "1d",
                        total: int = 1000) -> pd.DataFrame:
-    """获取 Binance K线数据，自动分页以突破 1000 条限制。
+    """获取 Binance 已收盘 K线数据，自动向历史分页以突破 1000 条限制。
 
     Args:
         symbol:    交易对，如 WLDUSDT
@@ -64,11 +89,13 @@ def get_binance_klines(symbol: str = "WLDUSDT", interval: str = "1d",
     """
     all_frames: list[pd.DataFrame] = []
     fetched = 0
-    start_time = None
+    end_time = _latest_closed_end_time(interval)
+    if end_time is None:
+        logger.warning("未知周期 %s，无法自动排除未收盘 K 线", interval)
 
     while fetched < total:
         batch = min(MAX_LIMIT, total - fetched)
-        data = _request_klines(symbol, interval, batch, start_time)
+        data = _request_klines(symbol, interval, batch, end_time)
         if not data:
             logger.error("返回数据为空，停止获取")
             break
@@ -77,8 +104,8 @@ def get_binance_klines(symbol: str = "WLDUSDT", interval: str = "1d",
         all_frames.append(df)
         fetched += len(df)
 
-        # 下一批从最后一条的 close_time + 1 开始
-        start_time = data[-1][6] + 1
+        # 下一批向历史回溯，从当前批次最早 K 线之前继续取。
+        end_time = data[0][0] - 1
         logger.info("已获取 %d / %d 条", fetched, total)
 
         if len(data) < batch:
@@ -105,8 +132,12 @@ if __name__ == "__main__":
     if df.empty:
         logger.error("未获取到数据，退出")
     else:
-        print(df.tail())
         os.makedirs(DATA_DIR, exist_ok=True)
         out_path = os.path.join(DATA_DIR, f"{args.symbol}_{args.interval}.csv")
         df.to_csv(out_path, index=False)
+        logger.info(
+            "数据范围(UTC): %s ~ %s",
+            df["date"].iloc[0],
+            df["date"].iloc[-1],
+        )
         logger.info("已保存 %d 条数据到 %s", len(df), out_path)
