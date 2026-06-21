@@ -35,12 +35,12 @@
 当前主线模型参数如下：
 
 ```text
-symbol        = WLDUSDT
-interval      = 1h
-horizon       = 72
-max_rows      = 6000
-seasonality   = 168
-estimator     = stan-map
+symbol         = WLDUSDT
+interval       = 1h
+horizon        = 72
+max_rows       = 6000
+seasonality    = 168
+estimator      = stan-map
 risk_threshold = -0.06
 ```
 
@@ -49,6 +49,57 @@ risk_threshold = -0.06
 ```text
 模型预测未来 72 小时收益率；
 risk_prob_return_le_threshold 表示未来 72 小时跌超 6% 的概率。
+```
+
+### 2.1 模型参数解释
+
+| 参数 | 当前值 | 作用 | 睡前记忆版 |
+|---|---:|---|---|
+| `symbol` | `WLDUSDT` | 交易标的 | 只看 WLD/USDT |
+| `interval` | `1h` | 使用 1 小时 K 线 | 每小时一个样本 |
+| `horizon` | `72` | 预测未来多少小时的收益率 | 看未来 3 天，不看几分钟 |
+| `max_rows` | `6000` | 最多使用最近 6000 条有效样本训练 | 用最近约 250 天小时线 |
+| `seasonality` | `168` | Orbit 的季节性周期 | 168 小时 = 1 周周期 |
+| `estimator` | `stan-map` | Orbit 参数估计方式 | 快速估计，适合每天跑 |
+| `risk_threshold` | `-0.06` | 定义什么叫风险事件 | 未来 72 小时跌超 6% |
+
+### 2.2 信号字段解释
+
+| 字段 | 含义 | 怎么用 |
+|---|---|---|
+| `predicted_simple_return_72h` | 模型预测未来 72 小时普通收益率 | 判断有没有上涨空间 |
+| `risk_prob_return_le_-6.00%` | 模型估计未来 72 小时跌超 6% 的概率 | 判断下行风险是否可接受 |
+| `signal` | 根据预测收益和风险概率得到的模型信号 | 看模型想要什么仓位 |
+| `action` | 结合当前仓位后给出的操作 | 看你应该买、卖、持有还是清仓 |
+| `current_position` | 当前仓位 | 你现在已持有多少实验资金比例 |
+| `target_position` | 目标仓位 | 模型希望你持有多少比例 |
+| `trade_delta` | 仓位差 | 正数买入，负数卖出，0 不动 |
+
+### 2.3 实盘规则参数解释
+
+| 参数 | 当前值 | 含义 | 对应动作 |
+|---|---:|---|---|
+| `long_threshold` | `0.03` | 预测涨幅至少 3% 才算普通做多 | 达标后考虑 60% 仓位 |
+| `buy_risk_max` | `0.35` | 普通做多允许的最大风险概率 | 风险概率不能超过 35% |
+| `strong_long_threshold` | `0.06` | 预测涨幅至少 6% 才算强做多 | 达标后考虑 100% 仓位 |
+| `strong_risk_max` | `0.30` | 强做多允许的最大风险概率 | 风险概率不能超过 30% |
+| `reduce_pred_threshold` | `0.01` | 预测涨幅低于 1% 说明信号转弱 | 降到 30% 仓位 |
+| `reduce_risk_threshold` | `0.60` | 风险概率达到 60% 说明风险升高 | 降到 30% 仓位 |
+| `clear_pred_threshold` | `-0.01` | 预测跌幅达到或超过 1% | 清仓 |
+| `clear_risk_threshold` | `0.80` | 风险概率达到 80% | 清仓 |
+| `reduced_position` | `0.30` | 弱信号目标仓位 | 只保留 30% 实验仓位 |
+| `base_position` | `0.60` | 普通做多目标仓位 | 持有 60% 实验仓位 |
+| `max_position` | `1.00` | 强做多目标仓位 | 买满 100% 实验仓位 |
+| `current_position` | 按实际填写 | 当前真实仓位 | 空仓填 0.0，60% 填 0.60，满仓填 1.0 |
+
+### 2.4 一句话记忆
+
+```text
+看未来 72 小时；
+预测涨 3% 且风险低于 35%，持有 60%；
+预测涨 6% 且风险低于 30%，加到 100%；
+预测转弱或风险升到 60%，降到 30%；
+预测转负或风险升到 80%，清仓。
 ```
 
 ---
@@ -363,4 +414,33 @@ python analysis/orbit_position_backtest.py \
 如果 signal 变成 strong_long，再考虑加仓到 100%。
 如果 signal 变成 reduced，则减仓到 30%。
 如果 clear_by_risk 或 clear_by_prediction，则清仓。
+```
+
+---
+
+## 11. 睡前重点速记
+
+今晚只需要记住这几条：
+
+```text
+1. 这是 1000 RMB 小资金实验，不动主账户。
+2. 当前已买 89 USDT WLD，约 60% 实验仓位。
+3. 模型看未来 72 小时，不看 5 分钟波动。
+4. 当前最新信号是 long / hold，所以现在持有，不加仓。
+5. 每次操作前：先更新 K 线，再跑 live signal。
+6. 数据时间如果明显滞后，不按信号操作。
+7. strong_long：加到 100%。
+8. long：继续持有 60%。
+9. reduced：降到 30%。
+10. clear_by_risk 或 clear_by_prediction：清仓。
+11. 跌 -8% 卖一半，跌 -12% 全卖。
+12. 涨 +15% 先卖一部分，涨 +25% 再卖一部分。
+```
+
+最短版：
+
+```text
+先更新数据，再跑信号；
+strong_long 加仓，long 持有，reduced 减仓，clear 清仓；
+硬止损优先于模型。
 ```
