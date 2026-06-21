@@ -177,7 +177,7 @@ def run_live_signal(config: LiveSignalConfig) -> tuple[pd.DataFrame, dict]:
 
     prediction_col = find_prediction_col(predicted_df, target_col)
     predicted_df, risk_method = attach_live_risk_probability(
-        predicted_df=predicted_df,
+        pred_df=predicted_df,
         train_df=train_df,
         target_col=target_col,
         prediction_col=prediction_col,
