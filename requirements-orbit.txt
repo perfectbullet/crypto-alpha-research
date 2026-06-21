@@ -1,0 +1,7 @@
+# Optional dependencies for Orbit-based Bayesian time-series experiments.
+# Prefer conda if cmdstan/orbit installation is troublesome:
+#   conda install -c conda-forge orbit-ml pandas numpy matplotlib
+orbit-ml
+pandas
+numpy
+matplotlib
