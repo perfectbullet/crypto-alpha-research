@@ -5,6 +5,7 @@ import os
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -34,6 +35,8 @@ class LiveSignalConfig:
     risk_threshold: float
     prediction_rows: int
     current_position: float
+    current_position_source: str
+    trade_record_json: Optional[str]
     long_threshold: float
     buy_risk_max: float
     strong_long_threshold: float
@@ -46,6 +49,47 @@ class LiveSignalConfig:
     base_position: float
     max_position: float
     no_regressors: bool
+
+
+def load_current_position_from_trade_record(path: str) -> tuple[float, dict[str, Any]]:
+    """Read current position from a manual trade record JSON file.
+
+    Expected minimal shape:
+    {
+      "current_state": {
+        "position_pct": 0.60,
+        "base_qty_wld": 141.35,
+        "cash_usdt": 60.11
+      }
+    }
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"交易记录 JSON 不存在: {path}")
+
+    with open(path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+
+    if not isinstance(payload, dict):
+        raise ValueError("交易记录 JSON 顶层必须是 object")
+
+    current_state = payload.get("current_state")
+    if not isinstance(current_state, dict):
+        raise ValueError("交易记录 JSON 缺少 current_state object")
+
+    if "position_pct" not in current_state:
+        raise ValueError("交易记录 JSON 缺少 current_state.position_pct")
+
+    try:
+        position_pct = float(current_state["position_pct"])
+    except (TypeError, ValueError) as exc:
+        raise ValueError("current_state.position_pct 必须是数字，例如 0.60") from exc
+
+    if not math.isfinite(position_pct):
+        raise ValueError("current_state.position_pct 必须是有限数字")
+    if position_pct < 0 or position_pct > 1:
+        raise ValueError("current_state.position_pct 必须在 0 到 1 之间，例如 0.60")
+
+    return position_pct, current_state
 
 
 def build_train_and_live_frames(
@@ -235,7 +279,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=2026, help="随机种子")
     parser.add_argument("--risk-threshold", type=float, default=-0.06, help="风险事件阈值，普通收益率")
     parser.add_argument("--prediction-rows", type=int, default=1, help="输出最近 N 条未标注样本的预测")
-    parser.add_argument("--current-position", type=float, default=0.0, help="当前实际仓位，0 表示空仓")
+    parser.add_argument("--current-position", type=float, default=0.0, help="当前实际仓位，0 表示空仓；若传入 --trade-record-json，则会被 JSON 中的 current_state.position_pct 覆盖")
+    parser.add_argument("--trade-record-json", default=None, help="可选：交易记录 JSON。若提供，自动读取 current_state.position_pct 作为当前仓位")
     parser.add_argument("--long-threshold", type=float, default=0.03, help="允许做多的预测收益阈值")
     parser.add_argument("--buy-risk-max", type=float, default=0.35, help="允许做多的最大风险概率")
     parser.add_argument("--strong-long-threshold", type=float, default=0.06, help="强做多预测收益阈值")
@@ -253,6 +298,14 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+
+    current_position = args.current_position
+    current_position_source = "cli:--current-position"
+    trade_record_current_state = None
+    if args.trade_record_json:
+        current_position, trade_record_current_state = load_current_position_from_trade_record(args.trade_record_json)
+        current_position_source = "trade_record_json:current_state.position_pct"
+
     config = LiveSignalConfig(
         input=args.input,
         output_dir=args.output_dir,
@@ -263,7 +316,9 @@ def main() -> None:
         seed=args.seed,
         risk_threshold=args.risk_threshold,
         prediction_rows=args.prediction_rows,
-        current_position=args.current_position,
+        current_position=current_position,
+        current_position_source=current_position_source,
+        trade_record_json=args.trade_record_json,
         long_threshold=args.long_threshold,
         buy_risk_max=args.buy_risk_max,
         strong_long_threshold=args.strong_long_threshold,
@@ -279,6 +334,8 @@ def main() -> None:
     )
 
     result, summary = run_live_signal(config)
+    if trade_record_current_state is not None:
+        summary["trade_record_current_state"] = trade_record_current_state
 
     os.makedirs(config.output_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -294,6 +351,9 @@ def main() -> None:
     print("\nOrbit 最新仓位信号完成")
     print(f"信号明细: {csv_path}")
     print(f"摘要 JSON: {json_path}")
+    print(f"当前仓位来源: {config.current_position_source}")
+    if config.trade_record_json:
+        print(f"交易记录 JSON: {config.trade_record_json}")
     print("\n最新信号:")
     print(f"  date: {latest['date']}")
     print(f"  predicted_simple_return_{config.horizon}h: {latest['predicted_simple_return']:.2%}")
