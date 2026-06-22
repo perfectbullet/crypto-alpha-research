@@ -26,13 +26,13 @@
     }
   },
   "current_state": {
-    "as_of_bj": null,
-    "base_qty_wld": 0.0,
-    "cash_usdt": 0.0,
+    "as_of_bj": "2026-06-22 09:32:00",
+    "base_qty_wld": 141.35,
+    "cash_usdt": 60.11,
     "avg_cost_usdt": null,
-    "last_price_usdt": null,
-    "position_pct": 0.0,
-    "notes": "template only"
+    "last_price_usdt": 0.6387,
+    "position_pct": 0.6,
+    "notes": "orbit_live_signal.py 会读取 current_state.position_pct 作为当前仓位。真实记录请复制到 data/manual/wldusdt_manual_trades.json 后维护。"
   },
   "trades": [
     {
