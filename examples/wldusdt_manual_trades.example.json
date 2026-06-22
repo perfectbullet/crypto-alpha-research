@@ -1,0 +1,77 @@
+{
+  "meta": {
+    "symbol": "WLDUSDT",
+    "timezone": "Asia/Shanghai",
+    "experiment_capital_usdt": 150.0,
+    "model": {
+      "interval": "1h",
+      "horizon_hours": 72,
+      "max_rows": 6000,
+      "seasonality": 168,
+      "estimator": "stan-map",
+      "risk_threshold": -0.06
+    },
+    "rules": {
+      "base_position": 0.6,
+      "max_position": 1.0,
+      "reduced_position": 0.3,
+      "long_threshold": 0.03,
+      "buy_risk_max": 0.35,
+      "strong_long_threshold": 0.06,
+      "strong_risk_max": 0.3,
+      "reduce_pred_threshold": 0.01,
+      "reduce_risk_threshold": 0.6,
+      "clear_pred_threshold": -0.01,
+      "clear_risk_threshold": 0.8
+    }
+  },
+  "current_state": {
+    "as_of_bj": null,
+    "base_qty_wld": 0.0,
+    "cash_usdt": 0.0,
+    "avg_cost_usdt": null,
+    "last_price_usdt": null,
+    "position_pct": 0.0,
+    "notes": "template only"
+  },
+  "trades": [
+    {
+      "id": "20260622-sell-001",
+      "trade_time_bj": "2026-06-22 09:32:00",
+      "symbol": "WLDUSDT",
+      "side": "SELL",
+      "base_qty": 94.0,
+      "price": 0.6387,
+      "quote_amount": 60.17,
+      "fee_amount": 0.06,
+      "fee_asset": "USDT",
+      "net_quote_amount": 60.11,
+      "position_before_pct": 1.0,
+      "position_after_pct": 0.6,
+      "remaining_base_qty": 141.35,
+      "reason_type": "manual_reduce",
+      "reason": "手动卖出约 40%，从满仓降回 60% 基础仓位",
+      "linked_signal_id": "20260622-000000-orbit-live",
+      "order_id": null,
+      "notes": "example only; real records should be kept under data/manual/"
+    }
+  ],
+  "snapshots": [
+    {
+      "id": "20260622-000000-orbit-live",
+      "run_time_bj": "2026-06-22 09:32:03",
+      "signal_date_utc": "2026-06-22 00:00:00",
+      "predicted_simple_return_72h": 0.0651,
+      "risk_prob_return_le_minus_6pct": 0.1954,
+      "signal": "strong_long",
+      "action": "increase",
+      "current_position": 0.6,
+      "target_position": 1.0,
+      "trade_delta": 0.4,
+      "signal_file": "reports/orbit_live/WLDUSDT_1h_orbit_live_h72_20260622_093203_signal.csv",
+      "summary_file": "reports/orbit_live/WLDUSDT_1h_orbit_live_h72_20260622_093203_summary.json",
+      "decision": "example signal snapshot",
+      "notes": "template only"
+    }
+  ]
+}
