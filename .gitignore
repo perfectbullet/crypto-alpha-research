@@ -38,3 +38,6 @@ reports/
 Thumbs.db
 .vscode/
 .idea/
+torch-cu128-wheel
+myplan.md
+new_cmd.txt
